@@ -20,18 +20,9 @@ jobs:
       - name: go mod tidy
         run: go mod tidy
 
-      - name: Generate Resource (Icon)
-        shell: pwsh
-        run: |
-          # Downloads the tool to turn .ico into a Windows resource
-          go install github.com/akavel/rsrc@latest
-          # Embeds logo.ico into a file called rsrc.syso
-          rsrc -ico logo.ico -o rsrc.syso
-
       - name: build Easiactivation.exe
         shell: pwsh
         run: |
-          # Build with icon and windowsgui so no black box appears
           go build -trimpath -ldflags="-s -w -H=windowsgui" -o Easiactivation.exe .
 
       - name: build keygen.exe
