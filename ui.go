@@ -1,104 +1,79 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/lxn/walk"
-	. "github.com/lxn/walk/declarative"
+	"syscall"
+	"unsafe"
 )
 
-type activationWindow struct {
-	*walk.MainWindow
-	userIDEdit  *walk.LineEdit
-	keyEdit     *walk.LineEdit
-	statusLabel *walk.Label
-	exeDir      string
-}
+var (
+	user32           = syscall.NewLazyDLL("user32.dll")
+	procMessageBoxW  = user32.NewProc("MessageBoxW")
+	procCreateWindow = user32.NewProc("CreateWindowExW")
+	procSendMessage  = user32.NewProc("SendMessageW")
+	procGetWindowText = user32.NewProc("GetWindowTextW")
+	procSetWindowText = user32.NewProc("SetWindowTextW")
+	procGetModuleHandle = syscall.NewLazyDLL("kernel32.dll").NewProc("GetModuleHandleW")
+	procDialogBoxParam = user32.NewProc("DialogBoxParamW")
+	procEndDialog     = user32.NewProc("EndDialog")
+)
 
 func runUI() {
-	// Load whatever DLLs were actually provided in the assets folder during build
 	loadEmbeddedDLLs()
-
-	exe, err := os.Executable()
-	if err != nil {
-		walk.MsgBox(nil, "Easiactivation", "Cannot determine EXE path: "+err.Error(), walk.MsgBoxIconError)
-		return
-	}
+	exe, _ := os.Executable()
 	exeDir := filepath.Dir(exe)
 
-	// Placement check FIRST (requires at least one DLL to exist in Main\)
 	if !CheckPlacement(exeDir) {
-		walk.MsgBox(nil, "Easiactivation", "Place me at the installation directory!\n(Make sure the Main folder contains the target DLL)", walk.MsgBoxOK|walk.MsgBoxIconError)
+		msg("Place me at the installation directory!\n(Make sure the Main folder contains the target DLL)", "Error")
 		return
 	}
 
-	w := &activationWindow{exeDir: exeDir}
+	// Win7 Safe UI fallback using basic Windows commands
+	uid := DeriveUserID(GetBiosSerial())
+	
+	inputKey := prompt("User ID: " + uid + "\n\nEnter Activation Key:")
+	if inputKey == "" { return }
 
-	mainWin := MainWindow{
-		AssignTo: &w.MainWindow,
-		Title:    "Easiactivation",
-		Size:     Size{Width: 480, Height: 260},
-		Layout:   VBox{MarginsZero: false},
-		Children: []Widget{
-			Label{Text: "Easiactivation"},
-			Composite{
-				Layout: HBox{},
-				Children: []Widget{
-					Label{Text: "User id", MinSize: Size{Width: 120}},
-					HSpacer{},
-					PushButton{
-						Text: "Generate",
-						OnClicked: func() {
-							serial := GetBiosSerial()
-							uid := DeriveUserID(serial)
-							w.userIDEdit.SetText(uid)
-							w.statusLabel.SetText("User id generated from this PC. Select it and press Ctrl+C to copy.")
-						},
-					},
-				},
-			},
-			LineEdit{AssignTo: &w.userIDEdit, ReadOnly: false},
-			Label{Text: "Activation key"},
-			LineEdit{AssignTo: &w.keyEdit},
-			PushButton{
-				Text: "VERIFY && ACTIVATE",
-				OnClicked: func() {
-					userID := strings.TrimSpace(w.userIDEdit.Text())
-					key := strings.TrimSpace(w.keyEdit.Text())
-					if len(digitsOnly(userID)) != 20 {
-						w.statusLabel.SetText("User id must contain exactly 20 digits.")
-						return
-					}
-					if !VerifyActivationKey(userID, key) {
-						w.statusLabel.SetText("Invalid activation key. Please check and try again.")
-						return
-					}
-					if err := Activate(w.exeDir); err != nil {
-						w.statusLabel.SetText("Activation failed: " + err.Error())
-						return
-					}
-					walk.MsgBox(w, "Easiactivation", "Activation completed successfully.", walk.MsgBoxOK|walk.MsgBoxIconInformation)
-					w.Close()
-				},
-			},
-			Label{AssignTo: &w.statusLabel, Text: ""},
-		},
+	if !VerifyActivationKey(uid, inputKey) {
+		msg("Invalid activation key.", "Error")
+		return
 	}
 
-	if _, err := mainWin.Run(); err != nil {
-		walk.MsgBox(nil, "Easiactivation", "UI error: "+err.Error(), walk.MsgBoxIconError)
+	if err := Activate(exeDir); err != nil {
+		msg("Activation failed: "+err.Error(), "Error")
+		return
 	}
+	msg("Activation completed successfully.", "Success")
 }
 
-// digitsOnly returns only 0-9 characters from s.
-func digitsOnly(s string) string {
-	var b strings.Builder
-	for _, r := range s {
-		if r >= '0' && r <= '9' {
-			b.WriteRune(r)
-		}
+func msg(text, title string) {
+	t, _ := syscall.UTF16PtrFromString(text)
+	ti, _ := syscall.UTF16PtrFromString(title)
+	procMessageBoxW.Call(0, uintptr(unsafe.Pointer(t)), uintptr(unsafe.Pointer(ti)), 0)
+}
+
+func prompt(promptText string) string {
+	// Simple input box using VBScript (built into Windows 7)
+	tmpFile := filepath.Join(os.Getenv("TEMP"), "easiact_input.txt")
+	os.Remove(tmpFile)
+	
+	script := fmt.Sprintf(`InputBox("%s", "Easiactivation")`, strings.ReplaceAll(promptText, `"`, `""`))
+	vbsFile := filepath.Join(os.Getenv("TEMP"), "easiact.vbs")
+	os.WriteFile(vbsFile, []byte(script), 0644)
+	
+	cmd := syscall.NewLazyDLL("kernel32.dll").NewProc("WinExec")
+	cmdStr := fmt.Sprintf(`cscript //nologo "%s" > "%s"`, vbsFile, tmpFile)
+	c, _ := syscall.UTF16PtrFromString(cmdStr)
+	cmd.Call(uintptr(unsafe.Pointer(c)), 0)
+	
+	for {
+		if _, err := os.Stat(tmpFile); err == nil { break }
 	}
-	return b.String()
+	out, _ := os.ReadFile(tmpFile)
+	os.Remove(tmpFile)
+	os.Remove(vbsFile)
+	return strings.TrimSpace(string(out))
 }
