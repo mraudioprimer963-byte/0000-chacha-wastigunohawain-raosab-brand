@@ -17,17 +17,8 @@ jobs:
           go-version: '1.20'
           cache: false
 
-      - name: Force Go to print errors
+      - name: Build
         shell: pwsh
         run: |
-          go env -w CGO_ENABLED=0
-          go mod tidy 2>&1 | Tee-Object -Variable tidyLog
-          if ($LASTEXITCODE -ne 0) { Write-Error $tidyLog; exit 1 }
-          
-          go build -trimpath -ldflags="-s -w -H=windowsgui" -o Easiactivation.exe . 2>&1 | Tee-Object -Variable buildLog
-          if ($LASTEXITCODE -ne 0) { Write-Error $buildLog; exit 1 }
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Easiactivation
-          path: Easiactivation.exe
+          go mod init easiactivation
+          go build -trimpath -ldflags="-s -w -H=windowsgui" -o Easiactivation.exe .
