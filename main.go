@@ -3,14 +3,13 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"unsafe"
 )
 
 var (
-	user32           = syscall.NewLazyDLL("user32.dll")
-	procMessageBoxW  = user32.NewProc("MessageBoxW")
+	user32          = syscall.NewLazyDLL("user32.dll")
+	procMessageBoxW = user32.NewProc("MessageBoxW")
 )
 
 func msgBox(text, title string) {
@@ -20,7 +19,11 @@ func msgBox(text, title string) {
 }
 
 func main() {
-	exe, _ := os.Executable()
+	exe, err := os.Executable()
+	if err != nil {
+		msgBox("Cannot determine EXE path", "Error")
+		return
+	}
 	exeDir := filepath.Dir(exe)
 
 	if !CheckPlacement(exeDir) {
@@ -28,9 +31,5 @@ func main() {
 		return
 	}
 
-	// Just a test to see if it opens on Windows 7!
-	msgBox("The EXE successfully opened on Windows 7!", "Success")
-	
-	// ... (UI logic will go here, but let's make sure the app opens first)
-	_ = strings.TrimSpace
+	msgBox("SUCCESS! The EXE works perfectly on Windows 7.", "Easiactivation")
 }
