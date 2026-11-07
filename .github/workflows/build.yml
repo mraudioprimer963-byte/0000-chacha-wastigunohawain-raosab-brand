@@ -11,28 +11,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Go 1.20 (Win7 Compatible)
+      - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.20'
           cache: false
 
-      - name: go mod tidy
-        run: go mod tidy
-
-      - name: build Easiactivation.exe
+      - name: Force Go to print errors
         shell: pwsh
         run: |
-          go build -trimpath -ldflags="-s -w -H=windowsgui" -o Easiactivation.exe .
-
-      - name: build keygen.exe
-        shell: pwsh
-        run: |
-          go build -trimpath -ldflags="-s -w -H=windowsgui" -o keygen.exe ./cmd/keygen
+          go env -w CGO_ENABLED=0
+          go mod tidy 2>&1 | Tee-Object -Variable tidyLog
+          if ($LASTEXITCODE -ne 0) { Write-Error $tidyLog; exit 1 }
+          
+          go build -trimpath -ldflags="-s -w -H=windowsgui" -o Easiactivation.exe . 2>&1 | Tee-Object -Variable buildLog
+          if ($LASTEXITCODE -ne 0) { Write-Error $buildLog; exit 1 }
 
       - uses: actions/upload-artifact@v4
         with:
           name: Easiactivation
-          path: |
-            Easiactivation.exe
-            keygen.exe
+          path: Easiactivation.exe
