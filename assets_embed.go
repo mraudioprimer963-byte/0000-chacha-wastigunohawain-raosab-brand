@@ -11,8 +11,6 @@ var (
 )
 
 func loadEmbeddedDLLs() {
-	var err error
 	dll1Bytes, _ = embeddedAssets.ReadFile("assets/Cvte.Platform.Basic.dll")
 	dll2Bytes, _ = embeddedAssets.ReadFile("assets/SWCoreSharp.SWAuthorization.SWAuthClients.dll")
-	_ = err
 }
