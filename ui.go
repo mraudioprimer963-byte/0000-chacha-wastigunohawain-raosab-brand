@@ -18,6 +18,9 @@ type activationWindow struct {
 }
 
 func runUI() {
+	// Load whatever DLLs were actually provided in the assets folder during build
+	loadEmbeddedDLLs()
+
 	exe, err := os.Executable()
 	if err != nil {
 		walk.MsgBox(nil, "Easiactivation", "Cannot determine EXE path: "+err.Error(), walk.MsgBoxIconError)
@@ -25,9 +28,9 @@ func runUI() {
 	}
 	exeDir := filepath.Dir(exe)
 
-	// Placement check FIRST (same behavior as old tool)
+	// Placement check FIRST (requires at least one DLL to exist in Main\)
 	if !CheckPlacement(exeDir) {
-		walk.MsgBox(nil, "Easiactivation", "Place me at the installation directory!", walk.MsgBoxOK|walk.MsgBoxIconError)
+		walk.MsgBox(nil, "Easiactivation", "Place me at the installation directory!\n(Make sure the Main folder contains the target DLL)", walk.MsgBoxOK|walk.MsgBoxIconError)
 		return
 	}
 

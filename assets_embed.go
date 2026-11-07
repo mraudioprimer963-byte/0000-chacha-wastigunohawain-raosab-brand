@@ -1,12 +1,27 @@
 package main
 
-import _ "embed"
+import "embed"
 
-//go:embed assets/Cvte.Platform.Basic.dll
-var dll1Bytes []byte
+//go:embed assets/*.dll
+var embeddedAssets embed.FS
 
-//go:embed assets/SWCoreSharp.SWAuthorization.SWAuthClients.dll
-var dll2Bytes []byte
+// We will check these at runtime to see what the user actually put in the assets folder
+var (
+	dll1Bytes []byte // Cvte.Platform.Basic.dll
+	dll2Bytes []byte // SWCoreSharp.SWAuthorization.SWAuthClients.dll
+)
 
-//go:embed assets/pubkey.bin
-var _embedCheckPubkey []byte // referenced by crypto.go via its own embed; keep file non-empty
+func loadEmbeddedDLLs() {
+	var err error
+	// Try loading DLL1 (won't crash if missing)
+	dll1Bytes, err = embeddedAssets.ReadFile("assets/Cvte.Platform.Basic.dll")
+	if err != nil {
+		dll1Bytes = nil
+	}
+
+	// Try loading DLL2 (won't crash if missing)
+	dll2Bytes, err = embeddedAssets.ReadFile("assets/SWCoreSharp.SWAuthorization.SWAuthClients.dll")
+	if err != nil {
+		dll2Bytes = nil
+	}
+}
